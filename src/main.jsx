@@ -8,17 +8,14 @@ import { setContext } from '@apollo/client/link/context';
 import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
 import { createClient } from 'graphql-ws';
 
-// Create WebSocket link
 const wsLink = new GraphQLWsLink(createClient({
-  url: 'ws://localhost:8000/graphql',
+  url: 'wss://ql-chat-be-production.up.railway.app/graphql',
 }));
 
-// Create HTTP link
 const httpLink = new HttpLink({
-  uri: 'http://localhost:8000/graphql',
+  uri: 'https://ql-chat-be-production.up.railway.app/graphql',
 });
 
-// Auth link to attach the token
 const authLink = setContext((_, { headers }) => {
   const token = localStorage.getItem('credentials');
   return {
