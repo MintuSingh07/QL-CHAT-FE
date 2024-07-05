@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { gql, useQuery, useMutation, useSubscription } from '@apollo/client';
+import React, { useState, useEffect, useRef } from 'react';
+import { gql, useQuery, useMutation, useSubscription, useLazyQuery } from '@apollo/client';
 import { jwtDecode } from 'jwt-decode';
 import styled from 'styled-components';
+import User from './User';
 
 const FETCH_SINGLE_CHAT = gql`
     query FetchSingleChatMessages($chatId: ID!) {
@@ -43,6 +44,17 @@ const SEND_MESSAGE = gql`
     }
 `;
 
+const SEARCH_USER = gql`
+    query SearchUserByNameAndEmail($search: String) {
+        searchUsers(search: $search) {
+            _id
+            userName
+            email
+            pic
+        }
+    }
+`;
+
 const SUBSCRIPTION = gql`
     subscription onMessageAdded($chatId: ID!) {
         messageAdded(chatId: $chatId) {
@@ -60,13 +72,30 @@ const SUBSCRIPTION = gql`
     }
 `;
 
+const ADD_USERS = gql`
+    mutation AddMemberToGroup($userId: ID!, $chatId: ID!) {
+        addMemberToGroup(userId: $userId, chatId: $chatId) {
+            chatName
+            users {
+                userName
+            }
+        }
+    }
+`;
+
 const Chat = ({ chatId }) => {
     const [currentUser, setCurrentUser] = useState(null);
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [messageInput, setMessageInput] = useState('');
     const [messages, setMessages] = useState([]);
+    const [showMemberPopup, setShowMemberPopup] = useState(false);
+    const [showSearchedResult, setShowSearchedResult] = useState([]);
+    const [searchedTerm, setSearchedTerm] = useState('');
+    const [mutationError, setMutationError] = useState([]);
+    const [refresh, setRefresh] = useState(false); // New state to trigger refresh
+    const messageRef = useRef();
 
-    const { data, loading, error } = useQuery(FETCH_SINGLE_CHAT, {
+    const { data, loading, error, refetch } = useQuery(FETCH_SINGLE_CHAT, {
         variables: { chatId },
         onCompleted: (data) => {
             setMessages(data.fetchSingleChatMessages);
@@ -75,17 +104,38 @@ const Chat = ({ chatId }) => {
 
     const [sendMessageMutation] = useMutation(SEND_MESSAGE, {
         onError: (error) => {
-            console.error('Error sending message:', error);
+            setMutationError(error.message);
         },
     });
 
-    const { data: subscriptionData } = useSubscription(SUBSCRIPTION, {
+    useSubscription(SUBSCRIPTION, {
         variables: { chatId },
         onSubscriptionData: ({ subscriptionData }) => {
             const newMessage = subscriptionData.data.messageAdded;
             setMessages((prevMessages) => [...prevMessages, newMessage]);
         },
     });
+
+    const [addUserMutation] = useMutation(ADD_USERS, {
+        onCompleted: () => {
+            setRefresh(!refresh); // Toggle refresh state
+        },
+        onError: (error) => {
+            setMutationError(error.message);
+        }
+    });
+
+    const [searchUsers, { data: searchData, loading: searchLoading, error: searchError }] = useLazyQuery(SEARCH_USER, {
+        onCompleted: (data) => {
+            setShowSearchedResult(data.searchUsers);
+        },
+    });
+
+    useEffect(() => {
+        if (searchedTerm.trim()) {
+            searchUsers({ variables: { search: searchedTerm } });
+        }
+    }, [searchedTerm]);
 
     useEffect(() => {
         const token = localStorage.getItem('credentials');
@@ -97,6 +147,15 @@ const Chat = ({ chatId }) => {
             setIsLoggedIn(false);
         }
     }, []);
+
+    useEffect(() => {
+        messageRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    }, [messages]);
+
+    // Refetch data when refresh state changes
+    useEffect(() => {
+        refetch();
+    }, [refresh, refetch]);
 
     if (loading) {
         return <p>Loading...</p>;
@@ -118,14 +177,29 @@ const Chat = ({ chatId }) => {
 
         sendMessageMutation({
             variables: {
-                chatId: chatId,
+                chatId,
                 content: messageInput,
             },
         });
-
-        // Clear input after sending message
         setMessageInput('');
     };
+
+    const handleAddUser = (userId) => {
+        addUserMutation({
+            variables: {
+                chatId,
+                userId,
+            }
+        });
+    };
+
+    const handleAddMemberPopup = () => {
+        setShowMemberPopup(!showMemberPopup);
+    };
+
+    setTimeout(() => {
+        setMutationError('')
+    }, 5000);
 
     return (
         <>
@@ -135,12 +209,33 @@ const Chat = ({ chatId }) => {
                         <ChatHeader>
                             {chatData?.isGroupChat ? (
                                 <GroupChatHeader>
-                                    <ChatName>{chatData.chatName}</ChatName>
-                                    <GroupChatNameContainer>
-                                        {chatData.users.map((user) => (
-                                            <GroupUsersName key={user.userName}>{user.userName}</GroupUsersName>
-                                        ))}
-                                    </GroupChatNameContainer>
+                                    <div>
+                                        <ChatName>{chatData.chatName}</ChatName>
+                                        <GroupChatNameContainer>
+                                            {(() => {
+                                                const allUsers = [currentUser, ...chatData.users.filter(user => user.userName !== currentUser)];
+                                                const displayUsers = allUsers.slice(0, 3);
+                                                const remainingCount = allUsers.length - displayUsers.length;
+
+                                                return (
+                                                    <>
+                                                        {displayUsers.map((user, index) => (
+                                                            <GroupUsersName key={index}>
+                                                                {user === currentUser ? 'You' : user.userName}
+                                                            </GroupUsersName>
+                                                        ))}
+                                                        {remainingCount > 0 && <GroupUsersName>and {remainingCount}+</GroupUsersName>}
+                                                    </>
+                                                );
+                                            })()}
+                                        </GroupChatNameContainer>
+
+                                    </div>
+                                    <div>
+                                        <button onClick={handleAddMemberPopup} style={{ backgroundColor: "#353944", padding: "1vh", border: "0", outline: "0", borderRadius: "1vh", cursor: "pointer" }}>
+                                            <i style={{ color: "white", fontSize: "2.5vh" }} className="fa-solid fa-user-plus"></i>
+                                        </button>
+                                    </div>
                                 </GroupChatHeader>
                             ) : (
                                 <>
@@ -163,16 +258,42 @@ const Chat = ({ chatId }) => {
                                 </OtherMessage>
                             )
                         )}
+                        <div ref={messageRef}></div>
                     </MessageContainer>
                     <SendInputDiv>
                         <input
                             type="text"
-                            placeholder='Message...'
+                            placeholder="Message..."
                             value={messageInput}
                             onChange={(e) => setMessageInput(e.target.value)}
                         />
                         <button onClick={handleSendMessage}>Send</button>
                     </SendInputDiv>
+                    {showMemberPopup && (
+                        <MemberAddContainer>
+                            <i onClick={handleAddMemberPopup} style={{ float: "right", fontWeight: "900", cursor: 'pointer', display: "block" }} className="fa-solid fa-x"></i>
+                            <h3>Add User</h3>
+                            <div>
+                                <input value={searchedTerm} onChange={(e) => setSearchedTerm(e.target.value)} type="text" placeholder='Search user by name or email...' />
+                            </div>
+                            <div className="user-list-container">
+                                {searchLoading && <p>Loading...</p>}
+                                {mutationError && <p style={{ color: "red" }}>{mutationError}</p>}
+                                {showSearchedResult.map((user) => (
+                                    <User
+                                        key={user._id}
+                                        email={user.email}
+                                        pic={user.pic}
+                                        userName={user.userName}
+                                        textColor={"black"}
+                                        cardWidth={"100%"}
+                                        onClick={() => handleAddUser(user._id)}
+                                    />
+                                ))}
+                            </div>
+                            {searchError && <p>Error: {searchError.message}</p>}
+                        </MemberAddContainer>
+                    )}
                 </ChatContainer>
             ) : (
                 <h1>You are not authorized to access this page</h1>
@@ -289,12 +410,17 @@ const UserIndicator = styled.div`
 const ChatHeader = styled.div`
     display: flex;
     align-items: center;
+    width: 100%;
 `;
 
 const GroupChatHeader = styled.div`
     display: flex;
-    flex-direction: column;
-`
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+
+`;
 
 const ChatName = styled.h1`
     color: white;
@@ -313,7 +439,7 @@ const UserProfileName = styled.h1`
     color: white;
     margin-left: 1.5vh;
     font-weight: 500;
-    font-size: 1.3rem;
+    font-size: 2vh;
 `;
 
 const GroupUsersName = styled.h1`
@@ -326,7 +452,37 @@ const GroupUsersName = styled.h1`
 const GroupChatNameContainer = styled.div`
     display: flex;
     height: 100%;
-    margin: .5rem 0;
+    margin: .5vh 0;
+`;
+
+const MemberAddContainer = styled.div`
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    height: 40vh;
+    width: 65vh;
+    background-color: #fff;
+    border-radius: 1vh;
+    padding: 2vh;
+
+    input {
+        margin-top: 4vh;
+        width: 100%;
+        padding: 1vh 0 1vh 0.5vh;
+    }
+
+    button {
+        margin-left: 1vh;
+        padding: 1vh 1vh;
+    }
+
+    .user-list-container {
+        max-height: 20vh; /* Adjust based on your design */
+        overflow-y: auto;
+        margin-top: 2vh;
+    }
+
 `;
 
 export default Chat;

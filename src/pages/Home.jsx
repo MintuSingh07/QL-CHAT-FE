@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import {jwtDecode} from 'jwt-decode';
+import { jwtDecode } from 'jwt-decode';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import User from '../components/User';
 import { gql, useQuery } from '@apollo/client';
 import Chat from '../components/Chat';
 import NoChat from '../components/NoChat';
+import SideNavComponent from '../components/SideNavComponent';
 
 const FETCH_CHATS = gql`
   query fetchChats {
@@ -41,7 +42,6 @@ const FETCH_CHATS = gql`
 const Home = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [user, setUser] = useState(null);
-  const [isCollapsed, setIsCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentChatId, setCurrentChatId] = useState('');
   const [showGroupChats, setShowGroupChats] = useState(false);
@@ -60,19 +60,6 @@ const Home = () => {
       navigate('/login');
     }
   }, [navigate]);
-
-  const handleToggleCollapse = () => {
-    setIsCollapsed(!isCollapsed);
-    const sideNav = document.getElementById('sidenav');
-    sideNav.style.width = isCollapsed ? '6vw' : '30vw';
-    sideNav.style.alignItems = isCollapsed ? 'center' : 'flex-start';
-    sideNav.style.padding = isCollapsed ? '0' : '1rem';
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('credentials');
-    navigate('/login');
-  };
 
   const handleSearchChange = (e) => {
     setSearchQuery(e.target.value);
@@ -98,34 +85,7 @@ const Home = () => {
     <>
       {isLoggedIn ? (
         <ChatBG>
-          <SideNav id="sidenav">
-            <i
-              onClick={handleToggleCollapse}
-              style={{ color: 'white', fontSize: '2rem', cursor: 'pointer' }}
-              className="fa-solid fa-bars"
-            ></i>
-            <Image style={{ marginTop: '5vh' }} src={user?.pic} />
-            <i
-              style={{ color: 'white', fontSize: '2rem', cursor: 'pointer', marginTop: '5vh' }}
-              className="fa-solid fa-comments"
-            ></i>
-            <i
-              style={{ color: 'white', fontSize: '2rem', cursor: 'pointer', marginTop: '5vh' }}
-              className="fa-brands fa-squarespace"
-            ></i>
-            <i
-              className="fa-solid fa-right-from-bracket"
-              style={{
-                color: 'white',
-                fontSize: '2rem',
-                cursor: 'pointer',
-                fontWeight: '600',
-                position: 'absolute',
-                bottom: '1rem',
-              }}
-              onClick={handleLogout}
-            ></i>
-          </SideNav>
+          <SideNavComponent />
           <UsersListCover>
             <SearchBar placeholder="Search..." value={searchQuery} onChange={handleSearchChange} />
             <ChatTypeContainer>
@@ -185,17 +145,6 @@ const UsersListCover = styled.div`
   border-right: 1px solid #ffffff2b;
 `;
 
-const SideNav = styled.div`
-  height: 100%;
-  width: 6vw;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 1rem 0;
-  background-color: #23262f;
-  position: relative;
-`;
-
 const ChatInterface = styled.div`
   height: 100%;
   width: 100%;
@@ -232,12 +181,6 @@ const SearchBar = styled.input`
   padding: 1rem;
 `;
 
-const Image = styled.img`
-  height: 6vh;
-  width: 6vh;
-  background-color: #fff;
-  border-radius: 50%;
-`;
 const ChatTypeContainer = styled.div`
   height: 5vh;
   width: 90%;

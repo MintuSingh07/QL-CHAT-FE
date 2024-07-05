@@ -1,13 +1,14 @@
 import React from 'react';
 import styled from 'styled-components';
 
-const User = ({ userName, latestMessage, pic, onClick }) => {
+const User = ({ userName, latestMessage, pic, onClick, email, textColor, cardWidth }) => {
     return (
-        <UserContainer onClick={onClick}>
+        <UserContainer style={{width: cardWidth}} onClick={onClick}>
             <Image src={pic} />
             <UserDetails>
-                <UserName>{userName}</UserName>
+                <UserName style={{color: textColor}}>{userName}</UserName>
                 <RecentMessage>{latestMessage}</RecentMessage>
+                <Email>{email}</Email>
             </UserDetails>
         </UserContainer>
     );
@@ -19,8 +20,8 @@ const UserContainer = styled.div`
     border-bottom: 1px solid #ffffff34;
     display: flex;
     align-items: center;
-    padding: 1rem .5rem;
-    border-radius: .5rem;
+    padding: 1vh 0.5vh;
+    border-radius: 0.5vh;
     cursor: pointer;
     &:hover {
         background-color: #7a7a7a6c;
@@ -39,18 +40,22 @@ const UserDetails = styled.div`
     width: 100%;
     display: flex;
     flex-direction: column;
-    padding-left: 2rem;
+    padding-left: 2vh;
     justify-content: center;
 `;
 
 const UserName = styled.h1`
     color: #ffffff;
-    font-size: 1.5rem;
-    margin-bottom: .5rem;
+    font-size: 2vh;
+    margin-bottom: 0.5vh;
 `;
 
 const RecentMessage = styled.p`
     color: #bdbdbd;
 `;
+
+const Email = styled.p`
+    color: #000000;
+`
 
 export default User;
